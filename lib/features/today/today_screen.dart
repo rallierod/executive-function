@@ -1,15 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-import '../food/models/breakfast_plan.dart';
+import '../food/models/meal_plan.dart';
 import '../../shared/widgets/timer_ring.dart';
 import 'models/task_run.dart';
 import 'widgets/task_flow_sheet.dart';
 
 class TodayScreen extends StatefulWidget {
-  const TodayScreen({super.key, required this.breakfastPlan});
+  const TodayScreen({super.key, required this.plannedMeals});
 
-  final BreakfastPlan? breakfastPlan;
+  final Map<MealCategory, PlannedMeal> plannedMeals;
 
   @override
   State<TodayScreen> createState() => _TodayScreenState();
@@ -17,7 +17,6 @@ class TodayScreen extends StatefulWidget {
 
 class _TodayScreenState extends State<TodayScreen> {
   static const Duration _timeTimerWindow = Duration(minutes: 60);
-  static const String _breakfastTaskId = 'breakfast';
 
   TimeOfDay _leaveTime = const TimeOfDay(hour: 7, minute: 45);
   DateTime? _leaveDateTime;
@@ -162,13 +161,18 @@ class _TodayScreenState extends State<TodayScreen> {
     ];
   }
 
-  bool get _hasBreakfastPlanToday {
-    final plan = widget.breakfastPlan;
-    return plan != null && plan.isForDate(DateTime.now()) && plan.requiredTasks.isNotEmpty;
+  String _mealTaskId(MealCategory category) => 'meal_${category.name}';
+
+  PlannedMeal? _plannedMealForToday(MealCategory category) {
+    final plan = widget.plannedMeals[category];
+    if (plan == null || !plan.isForDate(DateTime.now())) {
+      return null;
+    }
+    return plan;
   }
 
-  List<TaskFlowStep> _breakfastSteps() {
-    final plan = widget.breakfastPlan;
+  List<TaskFlowStep> _mealSteps(MealCategory category) {
+    final plan = _plannedMealForToday(category);
     if (plan == null) {
       return const <TaskFlowStep>[];
     }
@@ -176,7 +180,7 @@ class _TodayScreenState extends State<TodayScreen> {
     return plan.requiredTasks
         .map(
           (task) => TaskFlowStep(
-            id: 'breakfast_${task.toLowerCase().replaceAll(' ', '_')}',
+            id: '${category.name}_${task.toLowerCase().replaceAll(' ', '_')}',
             label: task,
             isRequired: true,
           ),
@@ -208,14 +212,26 @@ class _TodayScreenState extends State<TodayScreen> {
       ),
     ];
 
-    if (_hasBreakfastPlanToday) {
-      final mealName = widget.breakfastPlan!.mealName;
+    const categoryConfigs = <(MealCategory, IconData)>[
+      (MealCategory.breakfast, Icons.breakfast_dining_outlined),
+      (MealCategory.lunch, Icons.lunch_dining_outlined),
+      (MealCategory.dinner, Icons.dinner_dining_outlined),
+      (MealCategory.snack, Icons.cookie_outlined),
+    ];
+
+    for (final config in categoryConfigs.reversed) {
+      final category = config.$1;
+      final icon = config.$2;
+      final plan = _plannedMealForToday(category);
+      if (plan == null || plan.requiredTasks.isEmpty) {
+        continue;
+      }
       tasks.insert(
         1,
         _TaskTileConfig(
-          id: _breakfastTaskId,
-          title: 'Breakfast: $mealName',
-          icon: Icons.breakfast_dining_outlined,
+          id: _mealTaskId(category),
+          title: '${category.label}: ${plan.mealName}',
+          icon: icon,
         ),
       );
     }
@@ -228,7 +244,10 @@ class _TodayScreenState extends State<TodayScreen> {
         task.id != 'dressed' &&
         task.id != 'pack' &&
         task.id != 'meds' &&
-        task.id != _breakfastTaskId) {
+        task.id != _mealTaskId(MealCategory.breakfast) &&
+        task.id != _mealTaskId(MealCategory.lunch) &&
+        task.id != _mealTaskId(MealCategory.dinner) &&
+        task.id != _mealTaskId(MealCategory.snack)) {
       return;
     }
 
@@ -249,8 +268,13 @@ class _TodayScreenState extends State<TodayScreen> {
               'dressed' => _getDressedSteps(),
               'pack' => _packGrabSteps(),
               'meds' => _medsSteps(),
-              _breakfastTaskId => _breakfastSteps(),
-              _ => const <TaskFlowStep>[],
+              _ => _mealSteps(switch (task.id) {
+                'meal_breakfast' => MealCategory.breakfast,
+                'meal_lunch' => MealCategory.lunch,
+                'meal_dinner' => MealCategory.dinner,
+                'meal_snack' => MealCategory.snack,
+                _ => MealCategory.breakfast,
+              }),
             },
           ),
         );

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../features/closet/closet_screen.dart';
 import '../../features/food/food_screen.dart';
-import '../../features/food/models/breakfast_plan.dart';
+import '../../features/food/models/meal_plan.dart';
 import '../../features/money/money_screen.dart';
 import '../../features/plan/plan_screen.dart';
 import '../../features/today/today_screen.dart';
@@ -16,18 +16,22 @@ class AppShell extends StatefulWidget {
 
 class _AppShellState extends State<AppShell> {
   int _selectedIndex = 0;
-  BreakfastPlan? _todayBreakfastPlan;
+  final Map<MealCategory, PlannedMeal> _todayMealPlans = <MealCategory, PlannedMeal>{};
 
   @override
   Widget build(BuildContext context) {
     final screens = <Widget>[
-      TodayScreen(breakfastPlan: _todayBreakfastPlan),
+      TodayScreen(plannedMeals: _todayMealPlans),
       const PlanScreen(),
       FoodScreen(
-        breakfastPlan: _todayBreakfastPlan,
-        onBreakfastPlanChanged: (plan) {
+        plannedMeals: _todayMealPlans,
+        onMealPlanChanged: (category, plan) {
           setState(() {
-            _todayBreakfastPlan = plan;
+            if (plan == null) {
+              _todayMealPlans.remove(category);
+            } else {
+              _todayMealPlans[category] = plan;
+            }
           });
         },
       ),
