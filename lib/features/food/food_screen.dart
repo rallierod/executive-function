@@ -216,8 +216,21 @@ class _FoodScreenState extends State<FoodScreen> {
         isSelected: _selectedRecipeUrls.contains(recipe.sourceUrl),
         onToggleSelected: () => _toggleRecipeSelection(recipe),
         onPlanMeal: (category) => _planRecipeForCategory(recipe, category),
+        onRecipeUpdated: _updateRecipe,
       ),
     );
+  }
+
+  void _updateRecipe(Recipe recipe) {
+    setState(() {
+      final index = _recipes.indexWhere((item) => item.sourceUrl == recipe.sourceUrl);
+      if (index >= 0) {
+        _recipes[index] = recipe;
+      } else {
+        _recipes.insert(0, recipe);
+      }
+    });
+    widget.onRecipesChanged(List<Recipe>.unmodifiable(_recipes));
   }
 
   void _planRecipeForCategory(Recipe recipe, MealCategory category) {
@@ -588,170 +601,193 @@ class _FoodScreenState extends State<FoodScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Imported recipes: ${filteredRecipes.length}',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 8),
             Expanded(
-              child: filteredRecipes.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No recipes yet. Tap Import Recipe to add one.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    )
-                  : ListView.separated(
-                      itemCount: filteredRecipes.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (context, index) {
-                        final recipe = filteredRecipes[index];
-                        final isSelected = _selectedRecipeUrls.contains(recipe.sourceUrl);
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 12),
+                    Text(
+                      'Imported recipes: ${filteredRecipes.length}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    if (filteredRecipes.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 20),
+                        child: Center(
+                          child: Text(
+                            'No recipes yet. Tap Import Recipe to add one.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      )
+                    else
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: filteredRecipes.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 8),
+                        itemBuilder: (context, index) {
+                          final recipe = filteredRecipes[index];
+                          final isSelected = _selectedRecipeUrls.contains(recipe.sourceUrl);
 
-                        return Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () => _openRecipeDetails(recipe),
-                            borderRadius: BorderRadius.circular(14),
-                            child: AnimatedOpacity(
-                              duration: const Duration(milliseconds: 160),
-                              opacity: isSelected ? 0.75 : 1,
-                              child: Ink(
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: isSelected
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).colorScheme.outlineVariant,
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () => _openRecipeDetails(recipe),
+                              borderRadius: BorderRadius.circular(14),
+                              child: AnimatedOpacity(
+                                duration: const Duration(milliseconds: 160),
+                                opacity: isSelected ? 0.75 : 1,
+                                child: Ink(
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: isSelected
+                                          ? Theme.of(context).colorScheme.primary
+                                          : Theme.of(context).colorScheme.outlineVariant,
+                                    ),
                                   ),
-                                ),
-                                padding: const EdgeInsets.all(12),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            recipe.title,
-                                            style: Theme.of(context).textTheme.titleMedium,
+                                  padding: const EdgeInsets.all(12),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          if (recipe.imageUrl != null)
+                                            Padding(
+                                              padding: const EdgeInsets.only(right: 10),
+                                              child: _RecipeImageThumb(
+                                                imageUrl: recipe.imageUrl!,
+                                                size: 56,
+                                              ),
+                                            ),
+                                          Expanded(
+                                            child: Text(
+                                              recipe.title,
+                                              style: Theme.of(context).textTheme.titleMedium,
+                                            ),
                                           ),
-                                        ),
-                                        TextButton.icon(
-                                          onPressed: () => _toggleRecipeSelection(recipe),
-                                          icon: Icon(
-                                            isSelected
-                                                ? Icons.remove_shopping_cart_outlined
-                                                : Icons.add_shopping_cart_outlined,
-                                            size: 16,
+                                          TextButton.icon(
+                                            onPressed: () => _toggleRecipeSelection(recipe),
+                                            icon: Icon(
+                                              isSelected
+                                                  ? Icons.remove_shopping_cart_outlined
+                                                  : Icons.add_shopping_cart_outlined,
+                                              size: 16,
+                                            ),
+                                            label: Text(
+                                              isSelected ? 'Selected' : 'Select',
+                                              style: Theme.of(context).textTheme.labelMedium,
+                                            ),
                                           ),
-                                          label: Text(
-                                            isSelected ? 'Selected' : 'Select',
-                                            style: Theme.of(context).textTheme.labelMedium,
-                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        recipe.sourceDomain,
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ),
+                                      if (recipe.category != null) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Category: ${recipe.category}',
+                                          style: Theme.of(context).textTheme.bodySmall,
                                         ),
                                       ],
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      recipe.sourceDomain,
-                                      style: Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                    if (recipe.category != null) ...[
-                                      const SizedBox(height: 2),
+                                      if (recipe.allergens.isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Allergens: ${recipe.allergens.join(', ')}',
+                                          style: Theme.of(context).textTheme.bodySmall,
+                                        ),
+                                      ],
+                                      const SizedBox(height: 4),
                                       Text(
-                                        'Category: ${recipe.category}',
+                                        '${recipe.ingredients.length} ingredients',
                                         style: Theme.of(context).textTheme.bodySmall,
                                       ),
-                                    ],
-                                    if (recipe.allergens.isNotEmpty) ...[
                                       const SizedBox(height: 2),
                                       Text(
-                                        'Allergens: ${recipe.allergens.join(', ')}',
-                                        style: Theme.of(context).textTheme.bodySmall,
+                                        'Tap to view details',
+                                        style: Theme.of(context).textTheme.labelSmall,
                                       ),
                                     ],
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${recipe.ingredients.length} ingredients',
-                                      style: Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Tap to view details',
-                                      style: Theme.of(context).textTheme.labelSmall,
-                                    ),
-                                  ],
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 12),
+                    Text('Meal plan for Today', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      children: MealCategory.values.map((category) {
+                        return ChoiceChip(
+                          label: Text(category.label),
+                          selected: _selectedCategory == category,
+                          onSelected: (_) {
+                            setState(() {
+                              _selectedCategory = category;
+                              _hydrateFromSelectedPlan();
+                            });
+                          },
                         );
-                      },
+                      }).toList(),
                     ),
-            ),
-            const SizedBox(height: 8),
-            Text('Meal plan for Today', style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 8,
-              children: MealCategory.values.map((category) {
-                return ChoiceChip(
-                  label: Text(category.label),
-                  selected: _selectedCategory == category,
-                  onSelected: (_) {
-                    setState(() {
-                      _selectedCategory = category;
-                      _hydrateFromSelectedPlan();
-                    });
-                  },
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _selectedPlan == null
-                  ? 'Choose a recipe and plan it, or enter tasks manually.'
-                  : 'Current ${_selectedCategory.label}: ${_selectedPlan!.mealName}',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _mealNameController,
-              decoration: const InputDecoration(
-                labelText: 'Meal name',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _tasksController,
-              minLines: 2,
-              maxLines: 4,
-              decoration: InputDecoration(
-                labelText: '${_selectedCategory.label} tasks (one per line)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                FilledButton(
-                  onPressed: _saveMealPlan,
-                  child: const Text('Save Meal Plan'),
+                    const SizedBox(height: 8),
+                    Text(
+                      _selectedPlan == null
+                          ? 'Choose a recipe and plan it, or enter tasks manually.'
+                          : 'Current ${_selectedCategory.label}: ${_selectedPlan!.mealName}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _mealNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Meal name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _tasksController,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        labelText: '${_selectedCategory.label} tasks (one per line)',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        FilledButton(
+                          onPressed: _saveMealPlan,
+                          child: const Text('Save Meal Plan'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.tonal(
+                          onPressed: () {
+                            _mealNameController.clear();
+                            _tasksController.clear();
+                            widget.onMealPlanChanged(_selectedCategory, null);
+                          },
+                          child: const Text('Clear'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                FilledButton.tonal(
-                  onPressed: () {
-                    _mealNameController.clear();
-                    _tasksController.clear();
-                    widget.onMealPlanChanged(_selectedCategory, null);
-                  },
-                  child: const Text('Clear'),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -797,18 +833,84 @@ class _ParsedIngredient {
   final String? unit;
 }
 
+class _RecipeImageThumb extends StatelessWidget {
+  const _RecipeImageThumb({
+    required this.imageUrl,
+    this.size = 56,
+  });
+
+  final String imageUrl;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(10),
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Image.network(
+          imageUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) => _ImageFallback(size: size),
+          loadingBuilder: (context, child, progress) {
+            if (progress == null) {
+              return child;
+            }
+            return _ImageFallback(size: size, isLoading: true);
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ImageFallback extends StatelessWidget {
+  const _ImageFallback({
+    required this.size,
+    this.isLoading = false,
+  });
+
+  final double size;
+  final bool isLoading;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: size,
+      height: size,
+      color: colorScheme.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: isLoading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Icon(
+              Icons.restaurant_menu_outlined,
+              size: size * 0.38,
+              color: colorScheme.onSurfaceVariant,
+            ),
+    );
+  }
+}
+
 class _RecipeDetailsSheet extends StatefulWidget {
   const _RecipeDetailsSheet({
     required this.recipe,
     required this.isSelected,
     required this.onToggleSelected,
     required this.onPlanMeal,
+    required this.onRecipeUpdated,
   });
 
   final Recipe recipe;
   final bool isSelected;
   final VoidCallback onToggleSelected;
   final ValueChanged<MealCategory> onPlanMeal;
+  final ValueChanged<Recipe> onRecipeUpdated;
 
   @override
   State<_RecipeDetailsSheet> createState() => _RecipeDetailsSheetState();
@@ -816,10 +918,12 @@ class _RecipeDetailsSheet extends StatefulWidget {
 
 class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
   late MealCategory _selectedPlanCategory;
+  late String? _recipeCategory;
 
   @override
   void initState() {
     super.initState();
+    _recipeCategory = widget.recipe.category;
     _selectedPlanCategory = _inferCategory(widget.recipe.category) ?? MealCategory.breakfast;
   }
 
@@ -859,13 +963,28 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.recipe.imageUrl != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Image.network(
+                      widget.recipe.imageUrl!,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const _ImageFallback(size: 120),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+              ],
               Text(widget.recipe.title, style: textTheme.headlineSmall),
               const SizedBox(height: 6),
               Text(widget.recipe.sourceDomain, style: textTheme.bodyMedium),
-              if (widget.recipe.category != null) ...[
-                const SizedBox(height: 4),
-                Text('Category: ${widget.recipe.category}', style: textTheme.bodyMedium),
-              ],
+              const SizedBox(height: 4),
+              Text(
+                'Category: ${_recipeCategory ?? 'Uncategorized'}',
+                style: textTheme.bodyMedium,
+              ),
               if (widget.recipe.allergens.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 Text('Allergens: ${widget.recipe.allergens.join(', ')}', style: textTheme.bodyMedium),
@@ -908,6 +1027,30 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
                     ),
                   ),
                 ),
+              const SizedBox(height: 14),
+              Text('Recipe category', style: textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: const ['Breakfast', 'Lunch', 'Dinner', 'Snack'].map((category) {
+                  return category;
+                }).map((category) {
+                  return ChoiceChip(
+                    label: Text(category),
+                    selected: (_recipeCategory ?? '').toLowerCase() == category.toLowerCase(),
+                    onSelected: (selected) {
+                      if (!selected) {
+                        return;
+                      }
+                      setState(() {
+                        _recipeCategory = category;
+                      });
+                      widget.onRecipeUpdated(widget.recipe.copyWith(category: category));
+                    },
+                  );
+                }).toList(),
+              ),
               const SizedBox(height: 14),
               Text('Plan as', style: textTheme.titleSmall),
               const SizedBox(height: 8),

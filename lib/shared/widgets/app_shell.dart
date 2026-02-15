@@ -25,6 +25,7 @@ class _AppShellState extends State<AppShell> {
   final List<Recipe> _recipes = <Recipe>[];
   bool _isLoading = true;
   String? _loadError;
+  String? _syncError;
 
   @override
   void initState() {
@@ -34,6 +35,7 @@ class _AppShellState extends State<AppShell> {
 
   Future<void> _loadState() async {
     if (Firebase.apps.isEmpty) {
+      debugPrint('[AppShell] Firebase app not initialized. Local-only mode.');
       setState(() {
         _isLoading = false;
         _loadError = 'Firebase not connected yet. Running local-only for now.';
@@ -44,10 +46,14 @@ class _AppShellState extends State<AppShell> {
     _store ??= FirestoreAppDataStore();
 
     try {
+      debugPrint('[AppShell] Loading app state from Firestore...');
       final snapshot = await _store!.load();
       if (!mounted) {
         return;
       }
+      final loadedRecipes = snapshot?.recipes.length ?? 0;
+      final loadedMeals = snapshot?.plannedMeals.length ?? 0;
+      debugPrint('[AppShell] Load success. recipes=$loadedRecipes plannedMeals=$loadedMeals');
       setState(() {
         _todayMealPlans
           ..clear()
@@ -56,30 +62,48 @@ class _AppShellState extends State<AppShell> {
           ..clear()
           ..addAll(snapshot?.recipes ?? const <Recipe>[]);
         _isLoading = false;
+        _loadError = null;
       });
     } catch (e) {
+      debugPrint('[AppShell] Load failed: $e');
       if (!mounted) {
         return;
       }
       setState(() {
         _isLoading = false;
-        _loadError = 'Firebase not connected yet. Running local-only for now.';
+        _loadError = 'Firebase load failed: $e';
       });
     }
   }
 
   Future<void> _persistState() async {
     if (_store == null) {
+      debugPrint('[AppShell] Save skipped. Store unavailable.');
       return;
     }
 
     try {
+      debugPrint(
+        '[AppShell] Saving app state... recipes=${_recipes.length} plannedMeals=${_todayMealPlans.length}',
+      );
       await _store!.save(
         recipes: List<Recipe>.unmodifiable(_recipes),
         plannedMeals: Map<MealCategory, PlannedMeal>.unmodifiable(_todayMealPlans),
       );
-    } catch (_) {
-      // Keep app usable even before Firebase is fully configured.
+      debugPrint('[AppShell] Save success.');
+      if (mounted) {
+        setState(() {
+          _syncError = null;
+        });
+      }
+    } catch (e) {
+      debugPrint('[AppShell] Save failed: $e');
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _syncError = 'Firebase save failed: $e';
+      });
     }
   }
 
@@ -128,9 +152,31 @@ class _AppShellState extends State<AppShell> {
               content: Text(_loadError!),
               actions: [
                 TextButton(
+                  onPressed: _loadState,
+                  child: const Text('Retry'),
+                ),
+                TextButton(
                   onPressed: () {
                     setState(() {
                       _loadError = null;
+                    });
+                  },
+                  child: const Text('Dismiss'),
+                ),
+              ],
+            ),
+          if (_syncError != null)
+            MaterialBanner(
+              content: Text(_syncError!),
+              actions: [
+                TextButton(
+                  onPressed: _persistState,
+                  child: const Text('Retry Save'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      _syncError = null;
                     });
                   },
                   child: const Text('Dismiss'),

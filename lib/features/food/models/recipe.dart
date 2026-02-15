@@ -27,6 +27,36 @@ class Recipe {
   final String? servings;
   final String? imageUrl;
 
+  Recipe copyWith({
+    String? title,
+    List<String>? ingredients,
+    List<String>? steps,
+    String? sourceUrl,
+    String? sourceDomain,
+    String? category,
+    List<String>? allergens,
+    String? totalTime,
+    String? prepTime,
+    String? cookTime,
+    String? servings,
+    String? imageUrl,
+  }) {
+    return Recipe(
+      title: title ?? this.title,
+      ingredients: ingredients ?? this.ingredients,
+      steps: steps ?? this.steps,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
+      sourceDomain: sourceDomain ?? this.sourceDomain,
+      category: category ?? this.category,
+      allergens: allergens ?? this.allergens,
+      totalTime: totalTime ?? this.totalTime,
+      prepTime: prepTime ?? this.prepTime,
+      cookTime: cookTime ?? this.cookTime,
+      servings: servings ?? this.servings,
+      imageUrl: imageUrl ?? this.imageUrl,
+    );
+  }
+
   factory Recipe.fromMap(Map<String, dynamic> map) {
     final sourceUrl = _asString(map['sourceUrl']) ?? '';
     final sourceDomain = _asString(map['sourceDomain']) ?? 'unknown source';

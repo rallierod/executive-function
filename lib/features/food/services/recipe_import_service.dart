@@ -1,21 +1,80 @@
 import 'dart:convert';
+import 'dart:developer' as developer;
 
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/recipe.dart';
 
 class RecipeImportService {
+  static const String _functionsRegion = String.fromEnvironment(
+    'FIREBASE_FUNCTIONS_REGION',
+    defaultValue: 'us-central1',
+  );
+
   static const String _proxyBase = String.fromEnvironment(
     'RECIPE_PROXY_BASE',
-    defaultValue: 'http://localhost:8080',
+    defaultValue: '',
   );
 
   static Future<Recipe> importRecipe(String url) async {
+    final errors = <String>[];
     try {
-      return await importFromProxy(url);
-    } catch (_) {
-      return importFromUrlDirect(url);
+      final recipe = await importFromCallable(url);
+      developer.log(
+        'Imported via Firebase callable: ${recipe.title}',
+        name: 'RecipeImportService',
+      );
+      return recipe;
+    } catch (e) {
+      developer.log('Callable failed: $e', name: 'RecipeImportService');
+      errors.add(e.toString());
     }
+
+    if (_proxyBase.trim().isNotEmpty) {
+      try {
+        final recipe = await importFromProxy(url);
+        developer.log(
+          'Imported via local proxy: ${recipe.title}',
+          name: 'RecipeImportService',
+        );
+        return recipe;
+      } catch (e) {
+        developer.log('Proxy failed: $e', name: 'RecipeImportService');
+        errors.add(e.toString());
+      }
+    }
+
+    try {
+      final recipe = await importFromUrlDirect(url);
+      developer.log(
+        'Imported via direct URL fetch: ${recipe.title}',
+        name: 'RecipeImportService',
+      );
+      return recipe;
+    } catch (e) {
+      developer.log('Direct fetch failed: $e', name: 'RecipeImportService');
+      errors.add(e.toString());
+      throw Exception(
+        'Recipe import failed. Firebase function + fallback attempts failed.\n'
+        '${errors.join('\n')}',
+      );
+    }
+  }
+
+  static Future<Recipe> importFromCallable(String url) async {
+    final cleanUrl = url.trim();
+    final callable = FirebaseFunctions.instanceFor(region: _functionsRegion)
+        .httpsCallable('importRecipe');
+    final result = await callable.call(<String, dynamic>{'url': cleanUrl});
+
+    final data = result.data;
+    if (data is! Map) {
+      throw Exception('Function returned an unexpected response.');
+    }
+
+    final decoded = Map<String, dynamic>.from(data);
+    return Recipe.fromMap(decoded);
   }
 
   static Future<Recipe> importFromProxy(String url) async {
