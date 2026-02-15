@@ -13,10 +13,14 @@ class FoodScreen extends StatefulWidget {
     super.key,
     required this.plannedMeals,
     required this.onMealPlanChanged,
+    required this.initialRecipes,
+    required this.onRecipesChanged,
   });
 
   final Map<MealCategory, PlannedMeal> plannedMeals;
   final void Function(MealCategory category, PlannedMeal? plan) onMealPlanChanged;
+  final List<Recipe> initialRecipes;
+  final ValueChanged<List<Recipe>> onRecipesChanged;
 
   @override
   State<FoodScreen> createState() => _FoodScreenState();
@@ -38,6 +42,9 @@ class _FoodScreenState extends State<FoodScreen> {
     super.initState();
     _mealNameController = TextEditingController();
     _tasksController = TextEditingController();
+    _recipes
+      ..clear()
+      ..addAll(widget.initialRecipes);
     _hydrateFromSelectedPlan();
   }
 
@@ -46,6 +53,11 @@ class _FoodScreenState extends State<FoodScreen> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.plannedMeals != widget.plannedMeals) {
       _hydrateFromSelectedPlan();
+    }
+    if (oldWidget.initialRecipes != widget.initialRecipes) {
+      _recipes
+        ..clear()
+        ..addAll(widget.initialRecipes);
     }
   }
 
@@ -135,6 +147,7 @@ class _FoodScreenState extends State<FoodScreen> {
         _recipes.insert(0, recipe);
       }
     });
+    widget.onRecipesChanged(List<Recipe>.unmodifiable(_recipes));
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Imported ${recipe.title} (${_recipes.length} total)')),

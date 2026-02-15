@@ -15,6 +15,17 @@ extension MealCategoryLabel on MealCategory {
   }
 }
 
+extension MealCategoryCodec on MealCategory {
+  String get key => name;
+
+  static MealCategory fromKey(String value) {
+    return MealCategory.values.firstWhere(
+      (category) => category.name == value,
+      orElse: () => MealCategory.breakfast,
+    );
+  }
+}
+
 class PlannedMeal {
   const PlannedMeal({
     required this.category,
@@ -34,5 +45,29 @@ class PlannedMeal {
     return plannedDate.year == date.year &&
         plannedDate.month == date.month &&
         plannedDate.day == date.day;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'category': category.key,
+      'mealName': mealName,
+      'requiredTasks': requiredTasks,
+      'plannedDate': plannedDate.toIso8601String(),
+      'sourceRecipeUrl': sourceRecipeUrl,
+    };
+  }
+
+  factory PlannedMeal.fromMap(Map<String, dynamic> map) {
+    final categoryRaw = map['category']?.toString() ?? MealCategory.breakfast.key;
+    final requiredTasksRaw = map['requiredTasks'];
+    return PlannedMeal(
+      category: MealCategoryCodec.fromKey(categoryRaw),
+      mealName: map['mealName']?.toString() ?? '',
+      requiredTasks: requiredTasksRaw is List
+          ? requiredTasksRaw.map((item) => item.toString()).where((item) => item.trim().isNotEmpty).toList()
+          : const <String>[],
+      plannedDate: DateTime.tryParse(map['plannedDate']?.toString() ?? '') ?? DateTime.now(),
+      sourceRecipeUrl: map['sourceRecipeUrl']?.toString(),
+    );
   }
 }

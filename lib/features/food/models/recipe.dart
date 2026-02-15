@@ -47,6 +47,23 @@ class Recipe {
     );
   }
 
+  Map<String, dynamic> toMap() {
+    return {
+      'title': title,
+      'ingredients': ingredients,
+      'steps': steps,
+      'sourceUrl': sourceUrl,
+      'sourceDomain': sourceDomain,
+      'category': category,
+      'allergens': allergens,
+      'totalTime': totalTime,
+      'prepTime': prepTime,
+      'cookTime': cookTime,
+      'servings': servings,
+      'imageUrl': imageUrl,
+    };
+  }
+
   factory Recipe.fromJsonLd(Map<String, dynamic> json, String sourceUrl) {
     final name = _asString(json['name']) ?? 'Untitled recipe';
     final ingredients = _asStringList(json['recipeIngredient']);
