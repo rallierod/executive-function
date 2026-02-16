@@ -18,7 +18,8 @@ class FoodScreen extends StatefulWidget {
   });
 
   final Map<MealCategory, PlannedMeal> plannedMeals;
-  final void Function(MealCategory category, PlannedMeal? plan) onMealPlanChanged;
+  final void Function(MealCategory category, PlannedMeal? plan)
+  onMealPlanChanged;
   final List<Recipe> initialRecipes;
   final ValueChanged<List<Recipe>> onRecipesChanged;
 
@@ -115,7 +116,9 @@ class _FoodScreenState extends State<FoodScreen> {
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${_selectedCategory.label} plan saved for today.')),
+      SnackBar(
+        content: Text('${_selectedCategory.label} plan saved for today.'),
+      ),
     );
   }
 
@@ -140,7 +143,9 @@ class _FoodScreenState extends State<FoodScreen> {
     setState(() {
       _searchController.clear();
       _searchQuery = '';
-      final existingIndex = _recipes.indexWhere((item) => item.sourceUrl == recipe.sourceUrl);
+      final existingIndex = _recipes.indexWhere(
+        (item) => item.sourceUrl == recipe.sourceUrl,
+      );
       if (existingIndex >= 0) {
         _recipes[existingIndex] = recipe;
       } else {
@@ -150,7 +155,9 @@ class _FoodScreenState extends State<FoodScreen> {
     widget.onRecipesChanged(List<Recipe>.unmodifiable(_recipes));
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Imported ${recipe.title} (${_recipes.length} total)')),
+      SnackBar(
+        content: Text('Imported ${recipe.title} (${_recipes.length} total)'),
+      ),
     );
   }
 
@@ -161,9 +168,7 @@ class _FoodScreenState extends State<FoodScreen> {
   Future<void> _importRecipeFromPhoto() async {
     if (kIsWeb) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Photo OCR is currently mobile-only.'),
-        ),
+        const SnackBar(content: Text('Photo OCR is currently mobile-only.')),
       );
       return;
     }
@@ -177,11 +182,13 @@ class _FoodScreenState extends State<FoodScreen> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Scanning photo...')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Scanning photo...')));
 
-      final recipe = await PhotoRecipeImportService.importFromImagePath(image.path);
+      final recipe = await PhotoRecipeImportService.importFromImagePath(
+        image.path,
+      );
       if (!mounted) {
         return;
       }
@@ -191,7 +198,11 @@ class _FoodScreenState extends State<FoodScreen> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Photo import failed: ${e.toString().replaceFirst('Exception: ', '')}')),
+        SnackBar(
+          content: Text(
+            'Photo import failed: ${e.toString().replaceFirst('Exception: ', '')}',
+          ),
+        ),
       );
     }
   }
@@ -207,15 +218,22 @@ class _FoodScreenState extends State<FoodScreen> {
   }
 
   Future<void> _openRecipeDetails(Recipe recipe) async {
+    final prepMinutes = _extractMinutes(recipe.prepTime);
+    final cookMinutes = _extractMinutes(recipe.cookTime);
+    final gatherMinutes = _estimateGatherMinutes(recipe);
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (context) => _RecipeDetailsSheet(
         recipe: recipe,
+        estimatedGatherMinutes: gatherMinutes,
+        estimatedPrepMinutes: prepMinutes,
+        estimatedCookMinutes: cookMinutes,
         isSelected: _selectedRecipeUrls.contains(recipe.sourceUrl),
         onToggleSelected: () => _toggleRecipeSelection(recipe),
         onPlanMeal: (category) => _planRecipeForCategory(recipe, category),
+        onClearMealPlan: _clearMealPlanForCategory,
         onRecipeUpdated: _updateRecipe,
       ),
     );
@@ -223,7 +241,9 @@ class _FoodScreenState extends State<FoodScreen> {
 
   void _updateRecipe(Recipe recipe) {
     setState(() {
-      final index = _recipes.indexWhere((item) => item.sourceUrl == recipe.sourceUrl);
+      final index = _recipes.indexWhere(
+        (item) => item.sourceUrl == recipe.sourceUrl,
+      );
       if (index >= 0) {
         _recipes[index] = recipe;
       } else {
@@ -235,6 +255,9 @@ class _FoodScreenState extends State<FoodScreen> {
 
   void _planRecipeForCategory(Recipe recipe, MealCategory category) {
     final tasks = _buildMealTasksFromRecipe(recipe, category);
+    final prepMinutes = _extractMinutes(recipe.prepTime);
+    final cookMinutes = _extractMinutes(recipe.cookTime);
+    final gatherMinutes = _estimateGatherMinutes(recipe);
     widget.onMealPlanChanged(
       category,
       PlannedMeal(
@@ -243,6 +266,9 @@ class _FoodScreenState extends State<FoodScreen> {
         requiredTasks: tasks,
         plannedDate: DateTime.now(),
         sourceRecipeUrl: recipe.sourceUrl,
+        estimatedPrepMinutes: prepMinutes,
+        estimatedCookMinutes: cookMinutes,
+        estimatedGatherMinutes: gatherMinutes,
       ),
     );
 
@@ -256,30 +282,115 @@ class _FoodScreenState extends State<FoodScreen> {
     }
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Planned ${recipe.title} for ${category.label.toLowerCase()} today.')),
+      SnackBar(
+        content: Text(
+          'Planned ${recipe.title} for ${category.label.toLowerCase()} today.',
+        ),
+      ),
+    );
+  }
+
+  void _clearMealPlanForCategory(MealCategory category) {
+    widget.onMealPlanChanged(category, null);
+    if (_selectedCategory == category) {
+      _mealNameController.clear();
+      _tasksController.clear();
+    }
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Cleared ${category.label.toLowerCase()} plan.')),
     );
   }
 
   List<String> _buildMealTasksFromRecipe(Recipe recipe, MealCategory category) {
     final tasks = <String>[
+      'Gather ingredients',
       ...recipe.ingredients.map((item) => 'Ingredient: ${item.trim()}'),
+      'Prep ingredients',
     ];
 
     if (recipe.steps.isNotEmpty) {
-      final stepTasks = recipe.steps.take(4).map(_toTaskLabel).where((e) => e.isNotEmpty);
+      final stepTasks = recipe.steps
+          .take(6)
+          .toList()
+          .asMap()
+          .entries
+          .map((entry) => _toTaskLabel(entry.value, stepNumber: entry.key + 1))
+          .where((e) => e.isNotEmpty);
       tasks.addAll(stepTasks);
     } else if (recipe.ingredients.isNotEmpty) {
-      tasks.add('Prep ingredients');
       tasks.add('Cook ${recipe.title}');
     } else {
       tasks.add('Cook ${recipe.title}');
     }
 
     tasks.add('Serve ${category.label.toLowerCase()}');
-    return tasks.toSet().toList();
+    return _dedupeKeepOrder(tasks);
   }
 
-  String _toTaskLabel(String step) {
+  int? _extractMinutes(String? raw) {
+    if (raw == null) {
+      return null;
+    }
+    final value = raw.trim().toLowerCase();
+    if (value.isEmpty) {
+      return null;
+    }
+
+    final isoMatch = RegExp(r'pt(?:(\d+)h)?(?:(\d+)m)?').firstMatch(value);
+    if (isoMatch != null) {
+      final hours = int.tryParse(isoMatch.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(isoMatch.group(2) ?? '') ?? 0;
+      final total = (hours * 60) + minutes;
+      return total > 0 ? total : null;
+    }
+
+    final hourMatch = RegExp(r'(\d+)\s*h').firstMatch(value);
+    final minMatch = RegExp(r'(\d+)\s*m').firstMatch(value);
+    if (hourMatch != null || minMatch != null) {
+      final hours = int.tryParse(hourMatch?.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(minMatch?.group(1) ?? '') ?? 0;
+      final total = (hours * 60) + minutes;
+      return total > 0 ? total : null;
+    }
+
+    final plain = int.tryParse(
+      RegExp(r'(\d+)').firstMatch(value)?.group(1) ?? '',
+    );
+    return plain != null && plain > 0 ? plain : null;
+  }
+
+  int _estimateGatherMinutes(Recipe recipe) {
+    final ingredientCount = recipe.ingredients.length;
+    if (ingredientCount <= 4) {
+      return 4;
+    }
+    if (ingredientCount <= 8) {
+      return 6;
+    }
+    if (ingredientCount <= 12) {
+      return 8;
+    }
+    return 10;
+  }
+
+  List<String> _dedupeKeepOrder(List<String> values) {
+    final seen = <String>{};
+    final result = <String>[];
+    for (final item in values) {
+      final normalized = item.trim();
+      if (normalized.isEmpty || seen.contains(normalized)) {
+        continue;
+      }
+      seen.add(normalized);
+      result.add(normalized);
+    }
+    return result;
+  }
+
+  String _toTaskLabel(String step, {int? stepNumber}) {
     var text = step.trim();
     if (text.isEmpty) {
       return '';
@@ -287,7 +398,69 @@ class _FoodScreenState extends State<FoodScreen> {
     if (text.length > 56) {
       text = '${text.substring(0, 56).trim()}...';
     }
-    return text[0].toUpperCase() + text.substring(1);
+    final sentence = text[0].toUpperCase() + text.substring(1);
+    if (stepNumber == null) {
+      return sentence;
+    }
+    return 'Step $stepNumber: $sentence';
+  }
+
+  int? _estimateMinutesForMealTask(PlannedMeal plan, String task) {
+    final normalized = task.trim().toLowerCase();
+    final cookStepCount = plan.requiredTasks
+        .where((item) => item.trim().toLowerCase().startsWith('step '))
+        .length;
+    final perCookStepMinutes =
+        cookStepCount == 0 || plan.estimatedCookMinutes == null
+        ? null
+        : (plan.estimatedCookMinutes! / cookStepCount).round().clamp(1, 30);
+
+    if (normalized == 'gather ingredients') {
+      return plan.estimatedGatherMinutes ?? 5;
+    }
+    if (normalized == 'prep ingredients') {
+      return plan.estimatedPrepMinutes;
+    }
+    if (normalized.startsWith('ingredient:')) {
+      return 1;
+    }
+    if (normalized.startsWith('step ')) {
+      return perCookStepMinutes;
+    }
+    if (normalized.startsWith('cook ')) {
+      return plan.estimatedCookMinutes;
+    }
+    if (normalized.startsWith('serve ')) {
+      return 2;
+    }
+    return null;
+  }
+
+  int? _estimatedTotalMinutes(PlannedMeal plan) {
+    final gather = plan.estimatedGatherMinutes;
+    final prep = plan.estimatedPrepMinutes;
+    final cook = plan.estimatedCookMinutes;
+    if (gather == null && prep == null && cook == null) {
+      return null;
+    }
+    return (gather ?? 0) + (prep ?? 0) + (cook ?? 0);
+  }
+
+  String _timingSummaryLabel(PlannedMeal plan) {
+    final parts = <String>[];
+    if (plan.estimatedGatherMinutes != null) {
+      parts.add('Gather ${plan.estimatedGatherMinutes}m');
+    }
+    if (plan.estimatedPrepMinutes != null) {
+      parts.add('Prep ${plan.estimatedPrepMinutes}m');
+    }
+    if (plan.estimatedCookMinutes != null) {
+      parts.add('Cook ${plan.estimatedCookMinutes}m');
+    }
+    if (parts.isEmpty) {
+      return 'Estimated time will appear after planning from a recipe.';
+    }
+    return parts.join(' · ');
   }
 
   void _generateShoppingList() {
@@ -322,7 +495,11 @@ class _FoodScreenState extends State<FoodScreen> {
     for (final aggregate in aggregates.values) {
       if (aggregate.amountsByUnit.isEmpty) {
         final count = aggregate.unquantifiedCount;
-        merged.add(count > 1 ? '${aggregate.displayName} (x$count)' : aggregate.displayName);
+        merged.add(
+          count > 1
+              ? '${aggregate.displayName} (x$count)'
+              : aggregate.displayName,
+        );
         continue;
       }
 
@@ -338,9 +515,7 @@ class _FoodScreenState extends State<FoodScreen> {
     }
 
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ShoppingListScreen(items: merged),
-      ),
+      MaterialPageRoute(builder: (_) => ShoppingListScreen(items: merged)),
     );
   }
 
@@ -510,7 +685,9 @@ class _FoodScreenState extends State<FoodScreen> {
     }
 
     final label = value.toStringAsFixed(2);
-    return label.replaceFirst(RegExp(r'\.00$'), '').replaceFirst(RegExp(r'0$'), '');
+    return label
+        .replaceFirst(RegExp(r'\.00$'), '')
+        .replaceFirst(RegExp(r'0$'), '');
   }
 
   String _formatUnitLabel(String unit, double amount) {
@@ -543,16 +720,15 @@ class _FoodScreenState extends State<FoodScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filteredRecipes = _recipes
-        .where((recipe) {
-          if (_searchQuery.trim().isEmpty) {
-            return true;
-          }
-          final q = _searchQuery.toLowerCase();
-          return recipe.title.toLowerCase().contains(q) ||
-              recipe.sourceDomain.toLowerCase().contains(q);
-        })
-        .toList();
+    final selectedPlan = _selectedPlan;
+    final filteredRecipes = _recipes.where((recipe) {
+      if (_searchQuery.trim().isEmpty) {
+        return true;
+      }
+      final q = _searchQuery.toLowerCase();
+      return recipe.title.toLowerCase().contains(q) ||
+          recipe.sourceDomain.toLowerCase().contains(q);
+    }).toList();
 
     return SafeArea(
       child: Padding(
@@ -581,20 +757,20 @@ class _FoodScreenState extends State<FoodScreen> {
               },
             ),
             const SizedBox(height: 10),
-            Row(
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 FilledButton.icon(
                   onPressed: _openImportRecipeSheet,
                   icon: const Icon(Icons.add_link),
                   label: const Text('Import Recipe'),
                 ),
-                const SizedBox(width: 8),
                 FilledButton.tonalIcon(
                   onPressed: _importRecipeFromPhoto,
                   icon: const Icon(Icons.photo_camera_outlined),
                   label: const Text('Import Photo'),
                 ),
-                const SizedBox(width: 10),
                 FilledButton.tonal(
                   onPressed: _generateShoppingList,
                   child: const Text('Generate List'),
@@ -630,7 +806,9 @@ class _FoodScreenState extends State<FoodScreen> {
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, index) {
                           final recipe = filteredRecipes[index];
-                          final isSelected = _selectedRecipeUrls.contains(recipe.sourceUrl);
+                          final isSelected = _selectedRecipeUrls.contains(
+                            recipe.sourceUrl,
+                          );
 
                           return Material(
                             color: Colors.transparent,
@@ -642,24 +820,34 @@ class _FoodScreenState extends State<FoodScreen> {
                                 opacity: isSelected ? 0.75 : 1,
                                 child: Ink(
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.surface,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.surface,
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
                                       color: isSelected
-                                          ? Theme.of(context).colorScheme.primary
-                                          : Theme.of(context).colorScheme.outlineVariant,
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.outlineVariant,
                                     ),
                                   ),
                                   padding: const EdgeInsets.all(12),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           if (recipe.imageUrl != null)
                                             Padding(
-                                              padding: const EdgeInsets.only(right: 10),
+                                              padding: const EdgeInsets.only(
+                                                right: 10,
+                                              ),
                                               child: _RecipeImageThumb(
                                                 imageUrl: recipe.imageUrl!,
                                                 size: 56,
@@ -668,20 +856,29 @@ class _FoodScreenState extends State<FoodScreen> {
                                           Expanded(
                                             child: Text(
                                               recipe.title,
-                                              style: Theme.of(context).textTheme.titleMedium,
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.titleMedium,
                                             ),
                                           ),
                                           TextButton.icon(
-                                            onPressed: () => _toggleRecipeSelection(recipe),
+                                            onPressed: () =>
+                                                _toggleRecipeSelection(recipe),
                                             icon: Icon(
                                               isSelected
-                                                  ? Icons.remove_shopping_cart_outlined
-                                                  : Icons.add_shopping_cart_outlined,
+                                                  ? Icons
+                                                        .remove_shopping_cart_outlined
+                                                  : Icons
+                                                        .add_shopping_cart_outlined,
                                               size: 16,
                                             ),
                                             label: Text(
-                                              isSelected ? 'Selected' : 'Select',
-                                              style: Theme.of(context).textTheme.labelMedium,
+                                              isSelected
+                                                  ? 'Selected'
+                                                  : 'Select',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.labelMedium,
                                             ),
                                           ),
                                         ],
@@ -689,31 +886,41 @@ class _FoodScreenState extends State<FoodScreen> {
                                       const SizedBox(height: 2),
                                       Text(
                                         recipe.sourceDomain,
-                                        style: Theme.of(context).textTheme.bodySmall,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
                                       ),
                                       if (recipe.category != null) ...[
                                         const SizedBox(height: 2),
                                         Text(
                                           'Category: ${recipe.category}',
-                                          style: Theme.of(context).textTheme.bodySmall,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
                                         ),
                                       ],
                                       if (recipe.allergens.isNotEmpty) ...[
                                         const SizedBox(height: 2),
                                         Text(
                                           'Allergens: ${recipe.allergens.join(', ')}',
-                                          style: Theme.of(context).textTheme.bodySmall,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
                                         ),
                                       ],
                                       const SizedBox(height: 4),
                                       Text(
                                         '${recipe.ingredients.length} ingredients',
-                                        style: Theme.of(context).textTheme.bodySmall,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall,
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         'Tap to view details',
-                                        style: Theme.of(context).textTheme.labelSmall,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.labelSmall,
                                       ),
                                     ],
                                   ),
@@ -724,7 +931,10 @@ class _FoodScreenState extends State<FoodScreen> {
                         },
                       ),
                     const SizedBox(height: 12),
-                    Text('Meal plan for Today', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Meal plan for Today',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 4),
                     Wrap(
                       spacing: 8,
@@ -743,11 +953,48 @@ class _FoodScreenState extends State<FoodScreen> {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      _selectedPlan == null
+                      selectedPlan == null
                           ? 'Choose a recipe and plan it, or enter tasks manually.'
-                          : 'Current ${_selectedCategory.label}: ${_selectedPlan!.mealName}',
+                          : 'Current ${_selectedCategory.label}: ${selectedPlan.mealName}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
+                    if (selectedPlan != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        _estimatedTotalMinutes(selectedPlan) == null
+                            ? _timingSummaryLabel(selectedPlan)
+                            : 'Estimated total: ~${_estimatedTotalMinutes(selectedPlan)} min',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _timingSummaryLabel(selectedPlan),
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Step targets',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      ...selectedPlan.requiredTasks.map((task) {
+                        final estimate = _estimateMinutesForMealTask(
+                          selectedPlan,
+                          task,
+                        );
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Text(
+                            estimate == null
+                                ? '• $task'
+                                : '• $task (~$estimate min)',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        );
+                      }),
+                    ],
                     const SizedBox(height: 8),
                     TextField(
                       controller: _mealNameController,
@@ -762,7 +1009,8 @@ class _FoodScreenState extends State<FoodScreen> {
                       minLines: 2,
                       maxLines: 4,
                       decoration: InputDecoration(
-                        labelText: '${_selectedCategory.label} tasks (one per line)',
+                        labelText:
+                            '${_selectedCategory.label} tasks (one per line)',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -822,10 +1070,10 @@ class _ParsedIngredient {
   });
 
   const _ParsedIngredient.empty()
-      : key = '',
-        name = '',
-        amount = null,
-        unit = null;
+    : key = '',
+      name = '',
+      amount = null,
+      unit = null;
 
   final String key;
   final String name;
@@ -834,10 +1082,7 @@ class _ParsedIngredient {
 }
 
 class _RecipeImageThumb extends StatelessWidget {
-  const _RecipeImageThumb({
-    required this.imageUrl,
-    this.size = 56,
-  });
+  const _RecipeImageThumb({required this.imageUrl, this.size = 56});
 
   final String imageUrl;
   final double size;
@@ -852,7 +1097,8 @@ class _RecipeImageThumb extends StatelessWidget {
         child: Image.network(
           imageUrl,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) => _ImageFallback(size: size),
+          errorBuilder: (context, error, stackTrace) =>
+              _ImageFallback(size: size),
           loadingBuilder: (context, child, progress) {
             if (progress == null) {
               return child;
@@ -866,10 +1112,7 @@ class _RecipeImageThumb extends StatelessWidget {
 }
 
 class _ImageFallback extends StatelessWidget {
-  const _ImageFallback({
-    required this.size,
-    this.isLoading = false,
-  });
+  const _ImageFallback({required this.size, this.isLoading = false});
 
   final double size;
   final bool isLoading;
@@ -900,16 +1143,24 @@ class _ImageFallback extends StatelessWidget {
 class _RecipeDetailsSheet extends StatefulWidget {
   const _RecipeDetailsSheet({
     required this.recipe,
+    required this.estimatedGatherMinutes,
+    required this.estimatedPrepMinutes,
+    required this.estimatedCookMinutes,
     required this.isSelected,
     required this.onToggleSelected,
     required this.onPlanMeal,
+    required this.onClearMealPlan,
     required this.onRecipeUpdated,
   });
 
   final Recipe recipe;
+  final int estimatedGatherMinutes;
+  final int? estimatedPrepMinutes;
+  final int? estimatedCookMinutes;
   final bool isSelected;
   final VoidCallback onToggleSelected;
   final ValueChanged<MealCategory> onPlanMeal;
+  final ValueChanged<MealCategory> onClearMealPlan;
   final ValueChanged<Recipe> onRecipeUpdated;
 
   @override
@@ -924,7 +1175,8 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
   void initState() {
     super.initState();
     _recipeCategory = widget.recipe.category;
-    _selectedPlanCategory = _inferCategory(widget.recipe.category) ?? MealCategory.breakfast;
+    _selectedPlanCategory =
+        _inferCategory(widget.recipe.category) ?? MealCategory.breakfast;
   }
 
   MealCategory? _inferCategory(String? raw) {
@@ -963,6 +1215,23 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                children: [
+                  Text(
+                    'Recipe details',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: 'Close',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
               if (widget.recipe.imageUrl != null) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(14),
@@ -971,7 +1240,8 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
                     child: Image.network(
                       widget.recipe.imageUrl!,
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const _ImageFallback(size: 120),
+                      errorBuilder: (context, error, stackTrace) =>
+                          const _ImageFallback(size: 120),
                     ),
                   ),
                 ),
@@ -987,18 +1257,48 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
               ),
               if (widget.recipe.allergens.isNotEmpty) ...[
                 const SizedBox(height: 4),
-                Text('Allergens: ${widget.recipe.allergens.join(', ')}', style: textTheme.bodyMedium),
+                Text(
+                  'Allergens: ${widget.recipe.allergens.join(', ')}',
+                  style: textTheme.bodyMedium,
+                ),
               ],
               const SizedBox(height: 10),
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  if (widget.recipe.totalTime != null) Chip(label: Text('Total ${widget.recipe.totalTime}')),
-                  if (widget.recipe.prepTime != null) Chip(label: Text('Prep ${widget.recipe.prepTime}')),
-                  if (widget.recipe.cookTime != null) Chip(label: Text('Cook ${widget.recipe.cookTime}')),
-                  if (widget.recipe.servings != null) Chip(label: Text('Serves ${widget.recipe.servings}')),
+                  if (widget.recipe.totalTime != null)
+                    Chip(label: Text('Total ${widget.recipe.totalTime}')),
+                  if (widget.recipe.prepTime != null)
+                    Chip(label: Text('Prep ${widget.recipe.prepTime}')),
+                  if (widget.recipe.cookTime != null)
+                    Chip(label: Text('Cook ${widget.recipe.cookTime}')),
+                  if (widget.recipe.servings != null)
+                    Chip(label: Text('Serves ${widget.recipe.servings}')),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Text(
+                  _recipeTimingSummaryLabel(),
+                  style: textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
               const SizedBox(height: 14),
               Text('Ingredients', style: textTheme.titleMedium),
@@ -1033,23 +1333,30 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: const ['Breakfast', 'Lunch', 'Dinner', 'Snack'].map((category) {
-                  return category;
-                }).map((category) {
-                  return ChoiceChip(
-                    label: Text(category),
-                    selected: (_recipeCategory ?? '').toLowerCase() == category.toLowerCase(),
-                    onSelected: (selected) {
-                      if (!selected) {
-                        return;
-                      }
-                      setState(() {
-                        _recipeCategory = category;
-                      });
-                      widget.onRecipeUpdated(widget.recipe.copyWith(category: category));
-                    },
-                  );
-                }).toList(),
+                children: const ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+                    .map((category) {
+                      return category;
+                    })
+                    .map((category) {
+                      return ChoiceChip(
+                        label: Text(category),
+                        selected:
+                            (_recipeCategory ?? '').toLowerCase() ==
+                            category.toLowerCase(),
+                        onSelected: (selected) {
+                          if (!selected) {
+                            return;
+                          }
+                          setState(() {
+                            _recipeCategory = category;
+                          });
+                          widget.onRecipeUpdated(
+                            widget.recipe.copyWith(category: category),
+                          );
+                        },
+                      );
+                    })
+                    .toList(),
               ),
               const SizedBox(height: 14),
               Text('Plan as', style: textTheme.titleSmall),
@@ -1070,14 +1377,15 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
                 }).toList(),
               ),
               const SizedBox(height: 10),
-              Row(
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   FilledButton.icon(
                     onPressed: () => widget.onPlanMeal(_selectedPlanCategory),
                     icon: const Icon(Icons.event_available_outlined),
                     label: Text('Plan ${_selectedPlanCategory.label}'),
                   ),
-                  const SizedBox(width: 8),
                   FilledButton.tonalIcon(
                     onPressed: widget.onToggleSelected,
                     icon: Icon(
@@ -1091,7 +1399,12 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
                           : 'Add to Shopping List',
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    onPressed: () =>
+                        widget.onClearMealPlan(_selectedPlanCategory),
+                    icon: const Icon(Icons.remove_circle_outline),
+                    label: Text('Unplan ${_selectedPlanCategory.label}'),
+                  ),
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
                     child: const Text('Close'),
@@ -1104,13 +1417,26 @@ class _RecipeDetailsSheetState extends State<_RecipeDetailsSheet> {
       ),
     );
   }
+
+  String _recipeTimingSummaryLabel() {
+    final parts = <String>['Gather ~${widget.estimatedGatherMinutes}m'];
+    if (widget.estimatedPrepMinutes != null) {
+      parts.add('Prep ${widget.estimatedPrepMinutes}m');
+    }
+    if (widget.estimatedCookMinutes != null) {
+      parts.add('Cook ${widget.estimatedCookMinutes}m');
+    }
+    final total =
+        widget.estimatedGatherMinutes +
+        (widget.estimatedPrepMinutes ?? 0) +
+        (widget.estimatedCookMinutes ?? 0);
+    parts.add('Total ~${total}m');
+    return parts.join(' · ');
+  }
 }
 
 class _RecipeImportSheet extends StatefulWidget {
-  const _RecipeImportSheet({
-    required this.onImport,
-    required this.onImported,
-  });
+  const _RecipeImportSheet({required this.onImport, required this.onImported});
 
   final Future<Recipe> Function(String url) onImport;
   final ValueChanged<Recipe> onImported;
@@ -1179,7 +1505,10 @@ class _RecipeImportSheetState extends State<_RecipeImportSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Import Recipe', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Import Recipe',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: _urlController,

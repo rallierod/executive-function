@@ -30,7 +30,9 @@ class ShowerFlowData {
   final Map<String, bool> postPrompts;
 
   bool get hasCompletedSession =>
-      sessionStartedAt != null && sessionStoppedAt != null && sessionDurationSeconds > 0;
+      sessionStartedAt != null &&
+      sessionStoppedAt != null &&
+      sessionDurationSeconds > 0;
 
   ShowerFlowData copyWith({
     Map<String, bool>? preChecklist,
@@ -43,7 +45,8 @@ class ShowerFlowData {
       preChecklist: preChecklist ?? this.preChecklist,
       sessionStartedAt: sessionStartedAt ?? this.sessionStartedAt,
       sessionStoppedAt: sessionStoppedAt ?? this.sessionStoppedAt,
-      sessionDurationSeconds: sessionDurationSeconds ?? this.sessionDurationSeconds,
+      sessionDurationSeconds:
+          sessionDurationSeconds ?? this.sessionDurationSeconds,
       postPrompts: postPrompts ?? this.postPrompts,
     );
   }

@@ -34,7 +34,8 @@ class _SessionTimerState extends State<SessionTimer> {
   @override
   void didUpdateWidget(covariant SessionTimer oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.startedAt != widget.startedAt || oldWidget.stoppedAt != widget.stoppedAt) {
+    if (oldWidget.startedAt != widget.startedAt ||
+        oldWidget.stoppedAt != widget.stoppedAt) {
       _syncTicker();
     }
   }

@@ -10,9 +10,6 @@ class PhotoRecipeImportService {
     }
 
     final id = 'photo://${DateTime.now().millisecondsSinceEpoch}';
-    return RecipeTextParser.parse(
-      rawText: text,
-      sourceId: id,
-    );
+    return RecipeTextParser.parse(rawText: text, sourceId: id);
   }
 }

@@ -23,9 +23,11 @@ class TaskFlowStep {
     required this.id,
     required this.label,
     this.isRequired = false,
+    this.estimatedMinutes,
   });
 
   final String id;
   final String label;
   final bool isRequired;
+  final int? estimatedMinutes;
 }

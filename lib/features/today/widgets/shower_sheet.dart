@@ -6,10 +6,7 @@ import 'flow_sheet.dart';
 import 'session_timer.dart';
 
 class ShowerSheet extends StatefulWidget {
-  const ShowerSheet({
-    super.key,
-    required this.initialData,
-  });
+  const ShowerSheet({super.key, required this.initialData});
 
   final ShowerFlowData initialData;
 
@@ -64,7 +61,9 @@ class _ShowerSheetState extends State<ShowerSheet> {
   }
 
   bool get _canComplete =>
-      _sessionStartedAt != null && _sessionStoppedAt != null && _sessionDurationSeconds > 0;
+      _sessionStartedAt != null &&
+      _sessionStoppedAt != null &&
+      _sessionDurationSeconds > 0;
 
   ShowerFlowData _result() {
     return ShowerFlowData(
@@ -84,7 +83,10 @@ class _ShowerSheetState extends State<ShowerSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Grab these first', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Grab these first',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 10),
             GridView.count(
               crossAxisCount: 3,
@@ -102,7 +104,10 @@ class _ShowerSheetState extends State<ShowerSheet> {
               }).toList(),
             ),
             const SizedBox(height: 18),
-            Text('Shower session', style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              'Shower session',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             const SizedBox(height: 10),
             SessionTimer(
               startedAt: _sessionStartedAt,
@@ -112,39 +117,49 @@ class _ShowerSheetState extends State<ShowerSheet> {
             ),
             if (_sessionStoppedAt != null) ...[
               const SizedBox(height: 18),
-              Text('Quick check', style: Theme.of(context).textTheme.titleMedium),
+              Text(
+                'Quick check',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
               const SizedBox(height: 8),
               _PromptRow(
                 label: 'Washed hair',
                 value: _postPrompts['washedHair'] ?? false,
-                onChanged: (value) => setState(() => _postPrompts['washedHair'] = value),
+                onChanged: (value) =>
+                    setState(() => _postPrompts['washedHair'] = value),
               ),
               _PromptRow(
                 label: 'Shaved legs',
                 value: _postPrompts['shavedLegs'] ?? false,
-                onChanged: (value) => setState(() => _postPrompts['shavedLegs'] = value),
+                onChanged: (value) =>
+                    setState(() => _postPrompts['shavedLegs'] = value),
               ),
               _PromptRow(
                 label: 'Used shampoo',
                 value: _postPrompts['usedShampoo'] ?? false,
-                onChanged: (value) => setState(() => _postPrompts['usedShampoo'] = value),
+                onChanged: (value) =>
+                    setState(() => _postPrompts['usedShampoo'] = value),
               ),
               _PromptRow(
                 label: 'Used conditioner',
                 value: _postPrompts['usedConditioner'] ?? false,
-                onChanged: (value) => setState(() => _postPrompts['usedConditioner'] = value),
+                onChanged: (value) =>
+                    setState(() => _postPrompts['usedConditioner'] = value),
               ),
               _PromptRow(
                 label: 'Used body wash',
                 value: _postPrompts['usedBodyWash'] ?? false,
-                onChanged: (value) => setState(() => _postPrompts['usedBodyWash'] = value),
+                onChanged: (value) =>
+                    setState(() => _postPrompts['usedBodyWash'] = value),
               ),
             ],
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: FilledButton(
-                onPressed: _canComplete ? () => Navigator.of(context).pop(_result()) : null,
+                onPressed: _canComplete
+                    ? () => Navigator.of(context).pop(_result())
+                    : null,
                 child: const Text('Complete Shower Step'),
               ),
             ),
@@ -176,8 +191,8 @@ class _PromptRow extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: value ? FontWeight.w500 : FontWeight.w700,
-                  ),
+                fontWeight: value ? FontWeight.w500 : FontWeight.w700,
+              ),
             ),
           ),
           _PromptPill(
@@ -228,14 +243,16 @@ class _PromptPill extends StatelessWidget {
                   ? colorScheme.primary.withValues(alpha: 0.14)
                   : colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
               border: Border.all(
-                color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+                color: selected
+                    ? colorScheme.primary
+                    : colorScheme.outlineVariant,
               ),
             ),
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                  ),
+                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
           ),
         ),

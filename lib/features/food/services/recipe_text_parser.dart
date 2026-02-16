@@ -126,15 +126,26 @@ class RecipeTextParser {
     return deduped;
   }
 
-  static List<String> _detectAllergens(String rawText, List<String> ingredients) {
-    final haystack = '${rawText.toLowerCase()} ${ingredients.join(' ').toLowerCase()}';
+  static List<String> _detectAllergens(
+    String rawText,
+    List<String> ingredients,
+  ) {
+    final haystack =
+        '${rawText.toLowerCase()} ${ingredients.join(' ').toLowerCase()}';
     const terms = <String, List<String>>{
       'Milk': ['milk', 'butter', 'cream', 'cheese', 'yogurt'],
       'Egg': ['egg', 'eggs'],
       'Wheat/Gluten': ['wheat', 'flour', 'gluten'],
       'Soy': ['soy', 'soy sauce', 'tofu'],
       'Peanut': ['peanut'],
-      'Tree Nut': ['almond', 'cashew', 'walnut', 'pecan', 'pistachio', 'hazelnut'],
+      'Tree Nut': [
+        'almond',
+        'cashew',
+        'walnut',
+        'pecan',
+        'pistachio',
+        'hazelnut',
+      ],
       'Fish': ['fish', 'salmon', 'tuna', 'cod'],
       'Shellfish': ['shrimp', 'crab', 'lobster', 'shellfish'],
       'Sesame': ['sesame', 'tahini'],

@@ -2,10 +2,7 @@ import '../../features/food/models/meal_plan.dart';
 import '../../features/food/models/recipe.dart';
 
 class AppDataSnapshot {
-  const AppDataSnapshot({
-    required this.recipes,
-    required this.plannedMeals,
-  });
+  const AppDataSnapshot({required this.recipes, required this.plannedMeals});
 
   final List<Recipe> recipes;
   final Map<MealCategory, PlannedMeal> plannedMeals;

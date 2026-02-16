@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'shared/theme/app_theme.dart';
+import 'ui/theme/app_theme.dart';
 import 'shared/widgets/app_shell.dart';
 
 class ExecutiveFunctionApp extends StatelessWidget {
@@ -11,7 +11,9 @@ class ExecutiveFunctionApp extends StatelessWidget {
     return MaterialApp(
       title: 'Executive Function',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light,
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.system,
       home: const AppShell(),
     );
   }

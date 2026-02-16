@@ -64,8 +64,9 @@ class RecipeImportService {
 
   static Future<Recipe> importFromCallable(String url) async {
     final cleanUrl = url.trim();
-    final callable = FirebaseFunctions.instanceFor(region: _functionsRegion)
-        .httpsCallable('importRecipe');
+    final callable = FirebaseFunctions.instanceFor(
+      region: _functionsRegion,
+    ).httpsCallable('importRecipe');
     final result = await callable.call(<String, dynamic>{'url': cleanUrl});
 
     final data = result.data;
@@ -79,13 +80,14 @@ class RecipeImportService {
 
   static Future<Recipe> importFromProxy(String url) async {
     final cleanUrl = url.trim();
-    final uri = Uri.parse('$_proxyBase/import-recipe').replace(
-      queryParameters: {'url': cleanUrl},
-    );
+    final uri = Uri.parse(
+      '$_proxyBase/import-recipe',
+    ).replace(queryParameters: {'url': cleanUrl});
 
     final response = await http.get(uri);
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      final msg = _extractErrorMessage(response.body) ??
+      final msg =
+          _extractErrorMessage(response.body) ??
           'Proxy failed (${response.statusCode}).';
       throw Exception(msg);
     }

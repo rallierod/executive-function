@@ -41,12 +41,15 @@ class TimerRing extends StatelessWidget {
     final totalMs = totalDuration.inMilliseconds;
     final remainingMs = remainingDuration.inMilliseconds.clamp(0, totalMs);
     final progress = totalMs == 0 ? 0.0 : remainingMs / totalMs;
-    final hasExtra = extraTotalDuration != null && extraRemainingDuration != null;
+    final hasExtra =
+        extraTotalDuration != null && extraRemainingDuration != null;
     final extraTotalMs = hasExtra ? extraTotalDuration!.inMilliseconds : 0;
     final extraRemainingMs = hasExtra
         ? extraRemainingDuration!.inMilliseconds.clamp(0, extraTotalMs)
         : 0;
-    final extraProgress = extraTotalMs == 0 ? 0.0 : extraRemainingMs / extraTotalMs;
+    final extraProgress = extraTotalMs == 0
+        ? 0.0
+        : extraRemainingMs / extraTotalMs;
     final resolvedExtraStrokeWidth = extraStrokeWidth ?? (strokeWidth * 0.45);
 
     return SizedBox(
@@ -62,8 +65,10 @@ class TimerRing extends StatelessWidget {
               progress: animatedValues.dx,
               strokeWidth: strokeWidth,
               trackColor:
-                  trackColor ?? Theme.of(context).colorScheme.surfaceContainerHighest,
-              progressColor: progressColor ?? Theme.of(context).colorScheme.primary,
+                  trackColor ??
+                  Theme.of(context).colorScheme.surfaceContainerHighest,
+              progressColor:
+                  progressColor ?? Theme.of(context).colorScheme.primary,
               progressGradient: progressGradient,
               extraProgress: animatedValues.dy,
               extraStrokeWidth: resolvedExtraStrokeWidth,

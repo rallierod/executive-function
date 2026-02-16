@@ -133,9 +133,9 @@ class _TaskFlowSheetState extends State<TaskFlowSheet> {
       barrierDismissible: false,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Abort Shower?'),
-          content: const Text(
-            'This will stop the timer and discard this run.',
+          title: Text('Abort ${widget.title}?'),
+          content: Text(
+            'This will stop the ${widget.title} timer and discard this run.',
           ),
           actions: [
             TextButton(
@@ -178,10 +178,10 @@ class _TaskFlowSheetState extends State<TaskFlowSheet> {
               child: Text(
                 _formatHHMMSS(_elapsed),
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 0.9,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.9,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ),
             const SizedBox(height: 6),
@@ -213,6 +213,7 @@ class _TaskFlowSheetState extends State<TaskFlowSheet> {
                         label: step.label,
                         isRequired: step.isRequired,
                         isComplete: isComplete,
+                        estimatedMinutes: step.estimatedMinutes,
                         onTap: () => _toggleStep(step.id),
                       );
                     },
@@ -250,12 +251,14 @@ class _ModalStepTile extends StatelessWidget {
     required this.label,
     required this.isRequired,
     required this.isComplete,
+    required this.estimatedMinutes,
     required this.onTap,
   });
 
   final String label;
   final bool isRequired;
   final bool isComplete;
+  final int? estimatedMinutes;
   final VoidCallback onTap;
 
   @override
@@ -274,7 +277,9 @@ class _ModalStepTile extends StatelessWidget {
             duration: const Duration(milliseconds: 170),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.42),
+              color: colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.42,
+              ),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isComplete
@@ -288,17 +293,27 @@ class _ModalStepTile extends StatelessWidget {
                 Text(
                   isRequired ? 'Required' : 'Optional',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: colorScheme.onSurface.withValues(alpha: 0.72),
-                      ),
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface.withValues(alpha: 0.72),
+                  ),
                 ),
                 const Spacer(),
                 Text(
                   label,
                   style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: isComplete ? FontWeight.w500 : FontWeight.w700,
-                      ),
+                    fontWeight: isComplete ? FontWeight.w500 : FontWeight.w700,
+                  ),
                 ),
+                if (estimatedMinutes != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    '~$estimatedMinutes min',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
