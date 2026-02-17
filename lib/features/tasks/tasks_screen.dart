@@ -236,36 +236,24 @@ class _TasksScreenState extends State<TasksScreen> {
                   right: 0,
                   bottom: 8,
                   child: Center(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(999),
-                        gradient: LinearGradient(colors: [t.navy, t.pink]),
-                        boxShadow: [
-                          BoxShadow(
-                            color: t.pink.withValues(alpha: 0.3),
-                            blurRadius: 16,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: FilledButton.icon(
-                        onPressed: _createTile,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.transparent,
-                          shadowColor: Colors.transparent,
-                          foregroundColor: t.textPrimary,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 34,
-                            vertical: 16,
-                          ),
-                          textStyle: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
+                    child: FilledButton.icon(
+                      onPressed: _createTile,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: t.pink,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimary,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 34,
+                          vertical: 16,
                         ),
-                        icon: const Icon(Icons.add, size: 22),
-                        label: const Text('Add Task'),
+                        textStyle: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
+                      icon: const Icon(Icons.add, size: 22),
+                      label: const Text('Add Task'),
                     ),
                   ),
                 ),
@@ -316,9 +304,7 @@ class _PhaseFilterBar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  gradient: active
-                      ? LinearGradient(colors: [t.navy, t.pink])
-                      : null,
+                  color: active ? t.pink : null,
                 ),
                 child: Text(
                   label,
@@ -783,7 +769,7 @@ class _TemplateEditorSheetState extends State<_TemplateEditorSheet> {
                   DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(999),
-                      gradient: LinearGradient(colors: [t.navy, t.pink]),
+                      color: t.pink,
                       boxShadow: [
                         BoxShadow(
                           color: t.pink.withValues(alpha: 0.45),
@@ -797,7 +783,9 @@ class _TemplateEditorSheetState extends State<_TemplateEditorSheet> {
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         shadowColor: Colors.transparent,
-                        foregroundColor: t.textPrimary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 30,
                           vertical: 14,
@@ -883,10 +871,7 @@ class _SegmentedBar<T> extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(vertical: 11),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(999),
-                  gradient: selected
-                      ? LinearGradient(colors: [t.navy, t.pink])
-                      : null,
-                  color: selected ? null : Colors.transparent,
+                  color: selected ? t.pink : Colors.transparent,
                   boxShadow: selected
                       ? [
                           BoxShadow(

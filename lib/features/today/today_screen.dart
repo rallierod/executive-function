@@ -33,6 +33,24 @@ class _TodayScreenState extends State<TodayScreen> {
   static const int _oneTimeTenMinuteBonus = 3;
   static const String _mustDoOrderPrefKey = 'today_must_do_order_v1';
   static const String _mayDoOrderPrefKey = 'today_may_do_order_v1';
+  static const List<_QuickWinConfig> _quickWins = <_QuickWinConfig>[
+    _QuickWinConfig(
+      label: 'Water Brita',
+      icon: Icons.water_drop_outlined,
+      baseXp: 3,
+    ),
+    _QuickWinConfig(
+      label: 'Throw Papers Away',
+      icon: Icons.delete_sweep_outlined,
+      baseXp: 2,
+    ),
+    _QuickWinConfig(
+      label: 'Put Shoes Away',
+      icon: Icons.checkroom_outlined,
+      baseXp: 1,
+      needsCount: true,
+    ),
+  ];
 
   final Map<DayPhase, TimeOfDay> _windowEndTimes = <DayPhase, TimeOfDay>{
     DayPhase.morning: const TimeOfDay(hour: 7, minute: 45),
@@ -50,6 +68,7 @@ class _TodayScreenState extends State<TodayScreen> {
   Timer? _countdownTicker;
   _WindowLifecycle _windowLifecycle = _WindowLifecycle.inactive;
   DayPhase? _activePhase;
+  _DayMode _dayMode = _DayMode.deadline;
 
   final Map<String, List<TaskRun>> _taskRuns = <String, List<TaskRun>>{};
   final Map<String, double> _emaDurationSecByTask = <String, double>{};
@@ -451,9 +470,13 @@ class _TodayScreenState extends State<TodayScreen> {
     final templates = widget.customTasks
         .where((task) => task.id.startsWith('meal_') == false)
         .toList();
+    final completedShowerThisMorning = _isDoneInWindow(
+      'shower',
+      DayPhase.morning,
+    );
     final useHairInsteadOfShower =
         _activePhase == DayPhase.morning &&
-        _completedInPreviousEvening('shower');
+        (_completedInPreviousEvening('shower') || completedShowerThisMorning);
     final tasks = templates
         .where((task) {
           if (useHairInsteadOfShower && task.id == 'shower') {
@@ -850,6 +873,89 @@ class _TodayScreenState extends State<TodayScreen> {
     return _bonusEligible(tasks);
   }
 
+  Future<int?> _pickApproxShoePairCount() async {
+    return showDialog<int>(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: const Text('About how many pairs?'),
+          children: [
+            for (final count in <int>[1, 2, 3, 4, 5, 6, 8])
+              SimpleDialogOption(
+                onPressed: () => Navigator.of(context).pop(count),
+                child: Text(count == 8 ? '8+' : '$count'),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _logQuickWin(_QuickWinConfig quickWin) async {
+    if (!_isWindowRunning()) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Start a day window to log quick wins.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(milliseconds: 1100),
+          ),
+        );
+      return;
+    }
+
+    var xpEarned = quickWin.baseXp;
+    var detailsSuffix = '';
+    if (quickWin.needsCount) {
+      final pairCount = await _pickApproxShoePairCount();
+      if (pairCount == null || !mounted) {
+        return;
+      }
+      xpEarned = math.max(1, math.min(12, pairCount * 2));
+      detailsSuffix = pairCount >= 8 ? ' (8+ pairs)' : ' ($pairCount pairs)';
+    }
+
+    final completedAt = DateTime.now();
+    setState(() {
+      _todayXp += xpEarned;
+
+      final lastCompletion = _lastCompletionAt;
+      final isCombo =
+          lastCompletion != null &&
+          _isSameDay(lastCompletion, completedAt) &&
+          completedAt.difference(lastCompletion) <= const Duration(minutes: 20);
+      _comboCount = isCombo ? _comboCount + 1 : 1;
+      _lastCompletionAt = completedAt;
+
+      _xpBurstValue = xpEarned;
+      _showXpBurst = true;
+    });
+
+    _xpBurstTimer?.cancel();
+    _xpBurstTimer = Timer(const Duration(milliseconds: 1100), () {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _showXpBurst = false;
+      });
+    });
+
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('Logged ${quickWin.label}$detailsSuffix. +$xpEarned XP'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(milliseconds: 1100),
+        ),
+      );
+  }
+
   String _formatShortDuration(Duration duration) {
     final totalSeconds = duration.inSeconds < 0 ? 0 : duration.inSeconds;
     final minutes = totalSeconds ~/ 60;
@@ -897,11 +1003,6 @@ class _TodayScreenState extends State<TodayScreen> {
     return level;
   }
 
-  int _xpUntilNextLevel(int xp) {
-    final level = _levelForXp(xp);
-    return _xpToReachLevel(level + 1) - xp;
-  }
-
   int _xpForTask(_TaskTileConfig task) {
     final base = switch (task.bucket) {
       _TaskBucket.morning => 14,
@@ -911,20 +1012,6 @@ class _TodayScreenState extends State<TodayScreen> {
     };
     final mealOverride = task.id.startsWith('meal_') ? 11 : base;
     return mealOverride + _bonusXpForTask(task);
-  }
-
-  String _taskHint(_TaskTileConfig task, bool isRecommended) {
-    final bonus = _bonusXpForTask(task);
-    if (bonus > 0) {
-      return 'Early bonus +$bonus XP';
-    }
-    if (task.isBonus) {
-      return 'Bonus task';
-    }
-    if (isRecommended) {
-      return 'Recommended next';
-    }
-    return 'Tap to start';
   }
 
   List<_TaskTileConfig> _orderedTasksForPhase(
@@ -1186,6 +1273,12 @@ class _TodayScreenState extends State<TodayScreen> {
       builder: (context, constraints) {
         if (_activePhase == null) {
           return _PhaseSelectionView(
+            dayMode: _dayMode,
+            onDayModeChanged: (mode) {
+              setState(() {
+                _dayMode = mode;
+              });
+            },
             onSelect: (phase) {
               setState(() {
                 _celebratingTaskIds.clear();
@@ -1199,7 +1292,13 @@ class _TodayScreenState extends State<TodayScreen> {
         final isCompact = constraints.maxWidth < 700;
         final contentPadding = EdgeInsets.all(isCompact ? 16 : 24);
         final countdownLabel = _formatCountdownLabel(_countdownRemaining);
+        final isOpenDay = _dayMode == _DayMode.open;
         final nextTask = _nextBestTask(coreTaskTiles);
+        final momentumTask = _selectNextTask(
+          coreTaskTiles
+              .where((task) => !_isDoneForActiveWindow(task.id))
+              .toList(),
+        );
         final mustDoComplete = _mustDoComplete(coreTaskTiles);
         final revealMayDo = mustDoComplete && _celebratingTaskIds.isEmpty;
         final mustDoTasks = coreTaskTiles
@@ -1213,7 +1312,15 @@ class _TodayScreenState extends State<TodayScreen> {
             ? Duration.zero
             : _sprintEndsAt!.difference(DateTime.now());
         final sprintLabel = 'Sprint ${_formatShortDuration(sprintRemaining)}';
-        final displayTasks = revealMayDo
+        final displayTasks = isOpenDay
+            ? coreTaskTiles
+                  .where(
+                    (task) =>
+                        !_isDoneForActiveWindow(task.id) ||
+                        _celebratingTaskIds.contains(task.id),
+                  )
+                  .toList()
+            : revealMayDo
             ? mayDoTasks
             : mustDoTasks
                   .where(
@@ -1222,15 +1329,16 @@ class _TodayScreenState extends State<TodayScreen> {
                         _celebratingTaskIds.contains(task.id),
                   )
                   .toList();
-        final orderedDisplayTasks = _orderedTasksForPhase(
-          displayTasks,
-          phase: _activePhase!,
-          isMayDo: revealMayDo,
-        );
+        final orderedDisplayTasks = isOpenDay
+            ? displayTasks
+            : _orderedTasksForPhase(
+                displayTasks,
+                phase: _activePhase!,
+                isMayDo: revealMayDo,
+              );
 
         Widget buildTaskGuidanceCard() {
           final currentLevel = _levelForXp(_todayXp);
-          final xpToNextLevel = _xpUntilNextLevel(_todayXp);
           return Expanded(
             child: Stack(
               clipBehavior: Clip.none,
@@ -1271,67 +1379,63 @@ class _TodayScreenState extends State<TodayScreen> {
                                     ),
                                   ),
                                 ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: t.surface1,
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(color: t.borderSoft),
-                                  ),
+                                const SizedBox(width: 10),
+                                Expanded(
                                   child: Text(
-                                    'XP earned: $_todayXp',
+                                    _comboCount > 1
+                                        ? '$_todayXp XP  •  Streak x$_comboCount'
+                                        : '$_todayXp XP',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: textTheme.labelMedium?.copyWith(
-                                      color: t.navy,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 5,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: t.surface1,
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(color: t.borderSoft),
-                                  ),
-                                  child: Text(
-                                    'Combo x$_comboCount',
-                                    style: textTheme.labelMedium?.copyWith(
-                                      color: t.navy,
-                                      fontWeight: FontWeight.w700,
+                                      color: t.textSecondary,
+                                      fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
-                            Text(
-                              'Next level in $xpToNextLevel XP',
-                              style: textTheme.labelSmall?.copyWith(
-                                color: t.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
                             const SizedBox(height: 10),
-                            Text('Task Guidance', style: textTheme.titleLarge),
-                            const SizedBox(height: 6),
                             Text(
-                              !revealMayDo
-                                  ? 'Complete must-do tasks to unlock may-do tasks.'
-                                  : 'Must-do complete. Choose any may-do task.',
-                              style: textTheme.bodyMedium,
+                              isOpenDay
+                                  ? switch (_activePhase!) {
+                                      DayPhase.morning => 'Morning Momentum Run',
+                                      DayPhase.afternoon =>
+                                        'Afternoon Momentum Run',
+                                      DayPhase.evening => 'Evening Momentum Run',
+                                      DayPhase.care => 'Evening Momentum Run',
+                                    }
+                                  : switch (_activePhase!) {
+                                      DayPhase.morning =>
+                                        'Morning Village Requests',
+                                      DayPhase.afternoon =>
+                                        'Afternoon Village Requests',
+                                      DayPhase.evening =>
+                                        'Evening Village Requests',
+                                      DayPhase.care =>
+                                        'Evening Village Requests',
+                                    },
+                              style: textTheme.titleLarge,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Long-press and drag tiles to set your order.',
-                              style: textTheme.labelSmall,
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _quickWins
+                                  .map(
+                                    (quickWin) => FilledButton.tonalIcon(
+                                      onPressed: () => _logQuickWin(quickWin),
+                                      style: FilledButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 8,
+                                        ),
+                                      ),
+                                      icon: Icon(quickWin.icon, size: 16),
+                                      label: Text(quickWin.label),
+                                    ),
+                                  )
+                                  .toList(),
                             ),
                             const SizedBox(height: 10),
                             Expanded(
@@ -1351,6 +1455,7 @@ class _TodayScreenState extends State<TodayScreen> {
                                   final isDoneToday = _isDoneForActiveWindow(
                                     task.id,
                                   );
+                                  final bonusXp = _bonusXpForTask(task);
                                   const isRecommended = false;
                                   final isCelebrating = _celebratingTaskIds
                                       .contains(task.id);
@@ -1399,63 +1504,89 @@ class _TodayScreenState extends State<TodayScreen> {
                                                     )
                                                   : null,
                                             ),
-                                            child: LongPressDraggable<String>(
-                                              data: task.id,
-                                              dragAnchorStrategy:
-                                                  pointerDragAnchorStrategy,
-                                              feedback: Material(
-                                                color: Colors.transparent,
-                                                child: SizedBox(
-                                                  width: 160,
-                                                  height: 150,
-                                                  child: _TaskControlTile(
+                                            child: isOpenDay
+                                                ? _TaskControlTile(
                                                     title: task.title,
                                                     icon: task.icon,
                                                     xpValue: _xpForTask(task),
                                                     visualKind: visualKind,
-                                                    isCelebrating: false,
+                                                    isCelebrating: isCelebrating,
                                                     isLogged: isDoneToday,
-                                                    isRecommended: false,
-                                                    secondaryText: 'Move',
-                                                    onTap: () {},
-                                                  ),
-                                                ),
-                                              ),
-                                              childWhenDragging: Opacity(
-                                                opacity: 0.35,
-                                                child: _TaskControlTile(
-                                                  title: task.title,
-                                                  icon: task.icon,
-                                                  xpValue: _xpForTask(task),
-                                                  visualKind: visualKind,
-                                                  isCelebrating: false,
-                                                  isLogged: isDoneToday,
-                                                  isRecommended: false,
-                                                  secondaryText: 'Moving...',
-                                                  onTap: () {},
-                                                ),
-                                              ),
-                                              child: _TaskControlTile(
-                                                title: task.title,
-                                                icon: task.icon,
-                                                xpValue: _xpForTask(task),
-                                                visualKind: visualKind,
-                                                isCelebrating: isCelebrating,
-                                                isLogged: isDoneToday,
-                                                isRecommended: isRecommended,
-                                                secondaryText: isDoneToday
-                                                    ? 'Completed'
-                                                    : task.isRequired
-                                                    ? task.blocksMayDo
-                                                          ? 'Must do'
-                                                          : 'Optional must do'
-                                                    : _taskHint(
-                                                        task,
+                                                    isRecommended:
                                                         isRecommended,
+                                                    secondaryText: isDoneToday
+                                                        ? 'Completed'
+                                                        : task.isRequired
+                                                        ? 'Ready'
+                                                        : bonusXp > 0
+                                                        ? 'Favor +$bonusXp'
+                                                        : '',
+                                                    onTap: () => _openTask(task),
+                                                  )
+                                                : LongPressDraggable<String>(
+                                                    data: task.id,
+                                                    dragAnchorStrategy:
+                                                        pointerDragAnchorStrategy,
+                                                    feedback: Material(
+                                                      color: Colors.transparent,
+                                                      child: SizedBox(
+                                                        width: 160,
+                                                        height: 150,
+                                                        child: _TaskControlTile(
+                                                          title: task.title,
+                                                          icon: task.icon,
+                                                          xpValue: _xpForTask(
+                                                            task,
+                                                          ),
+                                                          visualKind:
+                                                              visualKind,
+                                                          isCelebrating: false,
+                                                          isLogged: isDoneToday,
+                                                          isRecommended: false,
+                                                          secondaryText: 'Move',
+                                                          onTap: () {},
+                                                        ),
                                                       ),
-                                                onTap: () => _openTask(task),
-                                              ),
-                                            ),
+                                                    ),
+                                                    childWhenDragging: Opacity(
+                                                      opacity: 0.35,
+                                                      child: _TaskControlTile(
+                                                        title: task.title,
+                                                        icon: task.icon,
+                                                        xpValue: _xpForTask(
+                                                          task,
+                                                        ),
+                                                        visualKind: visualKind,
+                                                        isCelebrating: false,
+                                                        isLogged: isDoneToday,
+                                                        isRecommended: false,
+                                                        secondaryText:
+                                                            'Moving...',
+                                                        onTap: () {},
+                                                      ),
+                                                    ),
+                                                    child: _TaskControlTile(
+                                                      title: task.title,
+                                                      icon: task.icon,
+                                                      xpValue: _xpForTask(task),
+                                                      visualKind: visualKind,
+                                                      isCelebrating:
+                                                          isCelebrating,
+                                                      isLogged: isDoneToday,
+                                                      isRecommended:
+                                                          isRecommended,
+                                                      secondaryText: isDoneToday
+                                                          ? 'Completed'
+                                                          : task.isRequired
+                                                          ? task.blocksMayDo
+                                                                ? 'Main challenge'
+                                                                : 'Challenge'
+                                                          : bonusXp > 0
+                                                          ? 'Favor +$bonusXp'
+                                                          : '',
+                                                      onTap: () => _openTask(task),
+                                                    ),
+                                                  ),
                                           );
                                         },
                                   );
@@ -1501,7 +1632,7 @@ class _TodayScreenState extends State<TodayScreen> {
                           child: Text(
                             '+$_xpBurstValue XP',
                             style: textTheme.labelMedium?.copyWith(
-                              color: t.textPrimary,
+                              color: colorScheme.onPrimary,
                               fontWeight: FontWeight.w800,
                               letterSpacing: 0.2,
                             ),
@@ -1538,10 +1669,10 @@ class _TodayScreenState extends State<TodayScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Wrap(
+                  LayoutBuilder(
+                    builder: (context, heroConstraints) {
+                      final useStackedHeader = heroConstraints.maxWidth < 430;
+                      final actionButtons = Wrap(
                         spacing: 8,
                         runSpacing: 8,
                         children: [
@@ -1559,9 +1690,27 @@ class _TodayScreenState extends State<TodayScreen> {
                               backgroundColor: t.surface0.withValues(
                                 alpha: 0.14,
                               ),
-                              foregroundColor: t.textPrimary,
+                              foregroundColor: colorScheme.onPrimary,
                             ),
                             child: Text(_activePhase!.label),
+                          ),
+                          FilledButton.tonal(
+                            onPressed: () => setState(() {
+                              _dayMode = _dayMode == _DayMode.deadline
+                                  ? _DayMode.open
+                                  : _DayMode.deadline;
+                            }),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: t.surface0.withValues(
+                                alpha: 0.14,
+                              ),
+                              foregroundColor: colorScheme.onPrimary,
+                            ),
+                            child: Text(
+                              _dayMode == _DayMode.open
+                                  ? 'Open Day'
+                                  : 'Deadline Day',
+                            ),
                           ),
                           FilledButton.tonalIcon(
                             onPressed: _resetTestingProgress,
@@ -1569,7 +1718,7 @@ class _TodayScreenState extends State<TodayScreen> {
                               backgroundColor: t.surface0.withValues(
                                 alpha: 0.14,
                               ),
-                              foregroundColor: t.textPrimary,
+                              foregroundColor: colorScheme.onPrimary,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
                               ),
@@ -1583,7 +1732,7 @@ class _TodayScreenState extends State<TodayScreen> {
                               backgroundColor: t.surface0.withValues(
                                 alpha: 0.14,
                               ),
-                              foregroundColor: t.textPrimary,
+                              foregroundColor: colorScheme.onPrimary,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 10,
                               ),
@@ -1592,10 +1741,11 @@ class _TodayScreenState extends State<TodayScreen> {
                             label: const Text('Reset Order'),
                           ),
                         ],
-                      ),
-                      const Spacer(),
-                      Transform.translate(
-                        offset: const Offset(-12, 10),
+                      );
+                      final timerPanel = Transform.translate(
+                        offset: useStackedHeader
+                            ? const Offset(0, 8)
+                            : const Offset(-12, 10),
                         child: Transform.rotate(
                           angle: -0.02,
                           child: _CountdownPanel(
@@ -1610,18 +1760,44 @@ class _TodayScreenState extends State<TodayScreen> {
                             showLeaveLabel: false,
                           ),
                         ),
-                      ),
-                    ],
+                      );
+
+                      if (useStackedHeader) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            actionButtons,
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: timerPanel,
+                            ),
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: actionButtons),
+                          const SizedBox(width: 8),
+                          timerPanel,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    nextTask == null
+                    isOpenDay
+                        ? momentumTask == null
+                              ? 'Momentum run complete'
+                              : 'Momentum run: ${momentumTask.title}'
+                        : nextTask == null
                         ? nextMayDoTask == null
-                              ? 'All set for now'
-                              : nextMayDoTask.title
-                        : 'NOW: ${nextTask.title}',
+                              ? 'Check the village board'
+                              : 'Open request: ${nextMayDoTask.title}'
+                        : 'Active challenge: ${nextTask.title}',
                     style: textTheme.titleLarge?.copyWith(
-                      color: t.textPrimary,
+                      color: colorScheme.onPrimary,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -1631,6 +1807,10 @@ class _TodayScreenState extends State<TodayScreen> {
                     child: FilledButton.icon(
                       onPressed: _sprintActive
                           ? null
+                          : isOpenDay
+                          ? momentumTask != null
+                                ? () => _openTask(momentumTask)
+                                : null
                           : nextTask != null
                           ? _startSixMinuteSprint
                           : nextMayDoTask != null
@@ -1646,11 +1826,13 @@ class _TodayScreenState extends State<TodayScreen> {
                       label: Text(
                         _sprintActive
                             ? sprintLabel
+                            : isOpenDay
+                            ? 'Start momentum run'
                             : nextTask != null
-                            ? 'Start 6-min Sprint'
+                            ? 'Accept 6-min challenge'
                             : revealMayDo
-                            ? 'Start May-Do Task'
-                            : 'Finish must-do tasks',
+                            ? 'Accept this request'
+                            : 'Clear more to unlock requests',
                       ),
                     ),
                   ),
@@ -1704,7 +1886,6 @@ class _TaskControlTile extends StatefulWidget {
 }
 
 class _TaskControlTileState extends State<_TaskControlTile> {
-  bool _isHovered = false;
   bool _isPressed = false;
 
   @override
@@ -1745,153 +1926,101 @@ class _TaskControlTileState extends State<_TaskControlTile> {
         ? 0.0
         : (_isPressed ? 0.65 : baseOpacity);
     final scale = widget.isCelebrating ? 1.14 : (_isPressed ? 0.97 : 1.0);
+    final hasSecondaryText = widget.secondaryText.trim().isNotEmpty;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 110),
-        curve: Curves.easeOut,
-        scale: scale,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onTap,
-            onTapDown: (_) => setState(() => _isPressed = true),
-            onTapUp: (_) => setState(() => _isPressed = false),
-            onTapCancel: () => setState(() => _isPressed = false),
-            borderRadius: BorderRadius.circular(14),
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 140),
-              opacity: displayOpacity,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 170),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
+    return AnimatedScale(
+      duration: const Duration(milliseconds: 110),
+      curve: Curves.easeOut,
+      scale: scale,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: widget.onTap,
+          onTapDown: (_) => setState(() => _isPressed = true),
+          onTapUp: (_) => setState(() => _isPressed = false),
+          onTapCancel: () => setState(() => _isPressed = false),
+          borderRadius: BorderRadius.circular(14),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 140),
+            opacity: displayOpacity,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 170),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: widget.isRecommended
+                    ? colorScheme.primary.withValues(alpha: 0.06)
+                    : kindColors.fill,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
                   color: widget.isRecommended
-                      ? colorScheme.primary.withValues(alpha: 0.08)
-                      : kindColors.fill,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: widget.isRecommended
-                        ? colorScheme.primary.withValues(alpha: 0.65)
-                        : kindColors.border,
-                    width: widget.isRecommended ? 1.6 : 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: widget.isRecommended
-                          ? (_isHovered ? 16 : 10)
-                          : (_isHovered ? 12 : 6),
-                      offset: Offset(
-                        0,
-                        widget.isRecommended ? 3 : (_isHovered ? 4 : 1),
-                      ),
-                      color: colorScheme.shadow.withValues(
-                        alpha: widget.isRecommended
-                            ? (_isHovered ? 0.16 : 0.10)
-                            : (_isHovered ? 0.12 : 0.06),
-                      ),
-                    ),
-                  ],
+                      ? colorScheme.primary.withValues(alpha: 0.55)
+                      : kindColors.border,
+                  width: widget.isRecommended ? 1.4 : 1,
                 ),
-                child: Stack(
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(widget.icon, size: 18, color: kindColors.icon),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(widget.icon, size: 18, color: kindColors.icon),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      fontSize: 16,
-                                      color: kindColors.text,
-                                      fontWeight: widget.isLogged
-                                          ? FontWeight.w500
-                                          : FontWeight.w700,
-                                    ),
+                        Text(
+                          widget.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                fontSize: 16,
+                                color: kindColors.text,
+                                fontWeight: widget.isLogged
+                                    ? FontWeight.w500
+                                    : FontWeight.w700,
                               ),
-                              const SizedBox(height: 1),
-                              Text(
-                                widget.secondaryText,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: kindColors.subtext,
-                                      fontSize: 12,
-                                    ),
-                              ),
-                            ],
-                          ),
                         ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: widget.isLogged
-                                ? t.pinkTint.withValues(alpha: 0.25)
-                                : kindColors.chip,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            '+${widget.xpValue}',
-                            style: Theme.of(context).textTheme.labelSmall
+                        if (hasSecondaryText) const SizedBox(height: 1),
+                        if (hasSecondaryText)
+                          Text(
+                            widget.secondaryText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: widget.isLogged
-                                      ? t.navy
-                                      : kindColors.chipText,
-                                  letterSpacing: 0.2,
+                                  color: kindColors.subtext,
+                                  fontSize: 12,
                                 ),
                           ),
-                        ),
                       ],
                     ),
-                    if (widget.isCelebrating)
-                      Positioned.fill(
-                        child: IgnorePointer(
-                          child: Center(
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                              children: [
-                                Icon(
-                                  Icons.auto_awesome,
-                                  color: t.pinkSoft,
-                                  size: 18,
-                                ),
-                                Icon(
-                                  Icons.auto_awesome,
-                                  color: t.pink,
-                                  size: 14,
-                                ),
-                                Icon(
-                                  Icons.auto_awesome,
-                                  color: t.pinkTint,
-                                  size: 16,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: widget.isLogged
+                          ? t.pinkTint.withValues(alpha: 0.18)
+                          : kindColors.chip,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '+${widget.xpValue}',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: widget.isLogged ? t.navy : kindColors.chipText,
+                        letterSpacing: 0.2,
                       ),
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1921,7 +2050,22 @@ class _TaskTileConfig {
   final bool blocksMayDo;
 }
 
+class _QuickWinConfig {
+  const _QuickWinConfig({
+    required this.label,
+    required this.icon,
+    required this.baseXp,
+    this.needsCount = false,
+  });
+
+  final String label;
+  final IconData icon;
+  final int baseXp;
+  final bool needsCount;
+}
+
 enum _WindowLifecycle { inactive, running, ended }
+enum _DayMode { deadline, open }
 
 class _CompletionEvent {
   const _CompletionEvent({
@@ -1950,8 +2094,14 @@ enum _TaskBucket { morning, afternoon, evening, care }
 enum _TaskVisualKind { mustDoBlocking, mustDoOptional, mayDo }
 
 class _PhaseSelectionView extends StatelessWidget {
-  const _PhaseSelectionView({required this.onSelect});
+  const _PhaseSelectionView({
+    required this.dayMode,
+    required this.onDayModeChanged,
+    required this.onSelect,
+  });
 
+  final _DayMode dayMode;
+  final ValueChanged<_DayMode> onDayModeChanged;
   final ValueChanged<DayPhase> onSelect;
 
   @override
@@ -1970,8 +2120,28 @@ class _PhaseSelectionView extends StatelessWidget {
                 Text('Pick Your Day Mode', style: textTheme.headlineSmall),
                 const SizedBox(height: 6),
                 Text(
-                  'For testing, choose which phase to load right now.',
+                  'Choose today\'s context, then start your phase.',
                   style: textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 12),
+                SegmentedButton<_DayMode>(
+                  segments: const [
+                    ButtonSegment<_DayMode>(
+                      value: _DayMode.deadline,
+                      label: Text('Deadline Day'),
+                    ),
+                    ButtonSegment<_DayMode>(
+                      value: _DayMode.open,
+                      label: Text('Open Day'),
+                    ),
+                  ],
+                  selected: <_DayMode>{dayMode},
+                  onSelectionChanged: (selection) {
+                    if (selection.isEmpty) {
+                      return;
+                    }
+                    onDayModeChanged(selection.first);
+                  },
                 ),
                 const SizedBox(height: 14),
                 Wrap(
@@ -1997,7 +2167,9 @@ class _PhaseSelectionView extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  'Evening gives bonus XP for prep tasks and evening shower.',
+                  dayMode == _DayMode.open
+                      ? 'Open Day starts with a momentum run instead of a must-do gate.'
+                      : 'Deadline Day keeps the must-do sequence before optional tasks.',
                   style: textTheme.labelMedium,
                 ),
               ],
@@ -2082,7 +2254,7 @@ class _CountdownPanel extends StatelessWidget {
                   : null,
               centerTextStyle: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: t.textPrimary,
+                color: colorScheme.onPrimary,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
